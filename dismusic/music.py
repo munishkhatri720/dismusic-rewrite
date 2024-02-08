@@ -1,15 +1,7 @@
-import asyncio
-
-import async_timeout
-import wavelink
-from discord import ClientException
+import discord
 from discord.ext import commands
-from wavelink import (LavalinkException, LoadTrackError, SoundCloudTrack,
-                      YouTubeMusicTrack, YouTubePlaylist, YouTubeTrack)
-from wavelink.ext import spotify
-from wavelink.ext.spotify import SpotifyTrack
+import wavelink
 
-from ._classes import Provider
 from .checks import voice_channel_player, voice_connected
 from .errors import MustBeSameChannel
 from .paginator import Paginator
@@ -22,6 +14,9 @@ class Music(commands.Cog):
     def __init__(self, bot):
         self.bot: commands.Bot = bot
         self.bot.loop.create_task(self.start_nodes())
+    
+    async def start_nodes(self)->None:
+        
 
     def get_nodes(self):
         return sorted(wavelink.NodePool._nodes.values(), key=lambda n: len(n.players))

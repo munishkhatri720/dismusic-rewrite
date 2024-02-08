@@ -1,116 +1,98 @@
-import asyncio
-import math
+import discord 
+from discord.ext import commands
+from typing import List
+from ._classes import Colors
 
-from discord import (Color, Embed, Forbidden, HTTPException, InvalidArgument,
-                     NotFound)
-
-from ._classes import Emojis, Loop
-
-
-class Paginator:
-    def __init__(self, ctx, player) -> None:
-        self.ctx = ctx
-        self.player = player
-
-    @staticmethod
-    def get_length(queue):
-        length = sum([track.length for track in queue._queue])
-        if length > 3600:
-            length = f"{int(length // 3600)}h {int(length % 3600 // 60)}m {int(length % 60)}s"
-        elif length > 60:
-            length = f"{int(length // 60)}m {int(length % 60)}s"
-        else:
-            length = f"{int(length)}s"
-
-        return length
-
-    def create_embed(self, tracks, current_page, total_pages):
-        embed = Embed(color=Color(0x2F3136))
-        embed.set_author(
-            name="Queue",
-            icon_url="https://cdn.discordapp.com/attachments/776345413132877854/940247400046542948/list.png",
-        )
-
-        if self.player.loop == Loop.CURRENT:
-            next_song = (
-                f"Next > [{self.player.source.title}]({self.player.source.uri}) \n\n"
-            )
-        else:
-            next_song = ""
-
-        description = next_song
-        queue_length = self.get_length(self.player.queue)
-
-        for index, track in enumerate(tracks):
-            description += (
-                f"{current_page * 10 + index + 1}. [{track.title}]({track.uri}) \n"
-            )
-
-        embed.description = description
-
-        if total_pages == 1:
-            embed.set_footer(
-                text=f"{len(self.player.queue._queue)} tracks, {queue_length}"
-            )
-        else:
-            embed.set_footer(
-                text=f"Page {current_page + 1}/{total_pages}, {len(self.player.queue._queue)} tracks, {queue_length}"
-            )
-
+class EntriesPaginator(discord.ui.View):
+    def __init__(self,title:str, context:commands.Context | discord.Interaction, entries:List[str],per:int=10, timeout: float | None = 180):
+        self.author = context.user if isinstance(context,  discord.Interaction) else context.author
+        self.entries = [entries[i:i+per] for i in range(0,  len(entries),  per)]
+        self.title = title
+        self.current_page :int = 0 
+        self.context = context
+        self.response :discord.InteractionMessage = None
+        super().__init__(timeout=timeout)
+        
+    def create_embed(self,  entry:List[str])->discord.Embed:
+        embed = discord.Embed(color=Colors.default)
+        embed.title = self.title
+        embed.description = '\n'.join(e for e in entry)
+        embed.set_footer(text=f"Showing Entry {self.current_page+1}/{len(self.entries)}",icon_url=self.author.display_avatar.url if self.author.display_avatar else self.author.default_avatar.url)
+        embed.timestamp = discord.utils.utcnow()
         return embed
-
+        
+    def disable_buttons(self):
+        self.go_first.disabled = False
+        self.go_previous.disabled = False
+        self.go_close.disabled = False
+        self.go_next.disabled = False
+        self.go_last.disabled = False
+        
+        if self.current_page == 0:
+            self.go_first.disabled = True
+            self.go_previous.disabled = True
+                
+        elif self.current_page == len(self.entries) - 1:
+            self.go_next.disabled = True
+            self.go_last.disabled = True
+                    
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message(content=f"Only **{self.author.name}** can interact to this view.",ephemeral=True)
+            return False
+        return True
+    
+    async def on_timeout(self) -> None:
+        for child in self.children:
+            child.disabled = True
+        try:
+            await self.response.edit(view=self)
+        except:
+            pass        
+            
+                       
+    async def update_page(self,interaction:discord.Interaction):
+        entry = self.entries[self.current_page]
+        embed = self.create_embed(entry)
+        self.disable_buttons()
+        await interaction.response.edit_message(embed=embed, view=self)            
+                
     async def start(self):
-        per_page = 10
-        current_page = 0
-        track_list = list(self.player.queue._queue)
-
-        total_pages = math.ceil(len(track_list) / per_page)
-
-        msg = None
-
-        while True:
-            tracks = track_list[current_page * per_page : (current_page + 1) * per_page]
-            embed = self.create_embed(tracks, current_page, total_pages)
-
-            if not msg:
-                msg = await self.ctx.send(embed=embed)
+        if len(self.entries) == 1:
+            self.clear_items()
+            if isinstance(self.context,  commands.Context):
+                self.response = await self.context.reply(embed=self.create_embed(self.entries[0]),view=None)
             else:
-                await msg.edit(embed=embed)
-
-            if total_pages > 1:
-                try:
-                    await msg.add_reaction(Emojis.FIRST)
-                    await msg.add_reaction(Emojis.PREV)
-                    await msg.add_reaction(Emojis.NEXT)
-                    await msg.add_reaction(Emojis.LAST)
-                except (HTTPException, Forbidden, NotFound, InvalidArgument) as e:
-                    print(e)
-                    pass
+                self.response = await self.context.response.send_message(embed=self.create_embed(self.entries[0]),view=None,ephemeral=True)    
+        else:
+            if isinstance(self.context,  commands.Context):
+                self.response = await self.context.reply(embed=self.create_embed(self.entries[0]),view=self)
             else:
-                break
-
-            def check(reaction, user):
-                valid_reactions = [Emojis.FIRST, Emojis.PREV, Emojis.NEXT, Emojis.LAST]
-                return (
-                    user == self.ctx.author
-                    and str(reaction.emoji) in valid_reactions
-                    and reaction.message.id == msg.id
-                )
-
-            try:
-                reaction, user = await self.ctx.bot.wait_for(
-                    "reaction_add", timeout=60.0, check=check
-                )
-            except asyncio.TimeoutError:
-                break
-
-            if str(reaction.emoji) == Emojis.PREV:
-                current_page = max(0, current_page - 1)
-            elif str(reaction.emoji) == Emojis.NEXT:
-                current_page = min(total_pages - 1, current_page + 1)
-            elif str(reaction.emoji) == Emojis.FIRST:
-                current_page = 0
-            elif str(reaction.emoji) == Emojis.LAST:
-                current_page = total_pages - 1
-
-            await msg.remove_reaction(reaction.emoji, user)
+                self.response = await self.context.response.send_message(embed=self.create_embed(self.entries[0]),view=self,ephemeral=True)     
+        
+    @discord.ui.button(label="First",style=discord.ButtonStyle.primary,custom_id="1",disabled=True)
+    async def go_first(self,  interaction:discord.Interaction,  button:discord.ui.Button):
+        self.current_page = 0
+        await self.update_page(interaction)
+            
+        
+    @discord.ui.button(label="Back",style=discord.ButtonStyle.green,custom_id="2",disabled=True)
+    async def go_previous(self,  interaction:discord.Interaction,  button:discord.ui.Button):
+        self.current_page -= 1 
+        await self.update_page(interaction)  
+        
+    @discord.ui.button(label="Close",style=discord.ButtonStyle.red,custom_id="3")
+    async def go_close(self,  interaction:discord.Interaction,  button:discord.ui.Button):
+        await interaction.message.delete()
+        
+        
+    @discord.ui.button(label="Next",style=discord.ButtonStyle.green,custom_id="4")
+    async def go_next(self,  interaction:discord.Interaction,button:discord.ui.Button):
+        self.current_page += 1 
+        await self.update_page(interaction)
+            
+        
+    @discord.ui.button(label="Last",style=discord.ButtonStyle.primary,custom_id="5")
+    async def go_last(self,  interaction:discord.Interaction,  button:discord.ui.Button):
+        self.current_page = len(self.entries) - 1
+        await self.update_page(interaction)   

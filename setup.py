@@ -11,10 +11,9 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Operating System :: Microsoft :: Windows",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 
 with open("requirements.txt") as f:
@@ -31,7 +30,7 @@ module_spec.loader.exec_module(version_module)
 setup(
     name="dismusic",
     version=version_module.__version__,
-    description="Music cog for discord bots. Supports YouTube, YoutubeMusic, SoundCloud and Spotify.",
+    description="Music cog for discord bots. Supports YouTube, YoutubeMusic, SoundCloud , AppleMusic , Deezer and Spotify.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/shahriyardx/dismusic/",
@@ -41,7 +40,7 @@ setup(
     classifiers=classifiers,
     keywords="discord discord-music music-bot discord-music-bot lavalink wavelink",
     packages=find_packages(),
-    python_requires=">=3.7, <4",
+    python_requires=">=3.10, <4",
     install_requires=requirements,
     project_urls={
         "Bug Reports": "https://github.com/shahriyardx/dismusic/issues",

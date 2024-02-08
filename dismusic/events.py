@@ -1,47 +1,50 @@
 import wavelink
+import discord
 from discord.ext import commands
-
-from ._classes import Loop
-from .errors import (InvalidLoopMode, MustBeSameChannel, NotConnectedToVoice,
+from .utils import format_millisecond
+from ._classes import Colors
+from .errors import ( MustBeSameChannel, NotConnectedToVoice,
                      NotEnoughSong, NothingIsPlaying, PlayerNotConnected)
 from .player import DisPlayer
-
+from wavelink import TrackStartEventPayload , TrackEndEventPayload , TrackStuckEventPayload , TrackExceptionEventPayload , NodeReadyEventPayload
 
 class MusicEvents(commands.Cog):
-    def __init__(self, bot) -> None:
+    def __init__(self, bot:commands.Bot) -> None:
         self.bot = bot
 
-    async def handle_end_stuck_exception(
-        self, player: DisPlayer, track: wavelink.abc.Playable
-    ):
-        if player.loop == Loop.CURRENT:
-            return await player.play(track)
-
-        if player.loop == Loop.PLAYLIST:
-            await player.queue.put(track)
-
-        player._source = None
-        await player.do_next()
+    
+    @commands.Cog.listener()
+    async def on_wavelink_track_start(self , payload : TrackStartEventPayload ):
+        player : DisPlayer = payload.player
+        track : wavelink.Playable = payload.track
+        original : wavelink.Playable = payload.original
+        player.client.dispatch('dismusic_track_start' , player , track , original)
+            
+            
+            
+    @commands.Cog.listener()
+    async def on_wavelink_track_end(self, payload : TrackEndEventPayload):
+        player : DisPlayer = payload.player
+        track = payload.track
+        original = payload.original
+        player.client.dispatch("dismusic_track_end", player , track , original)
+        
+    @commands.Cog.listener()
+    async def on_wavelink_track_exception(self, payload : TrackExceptionEventPayload):
+        track = payload.track
+        player = payload.player
+        exception = payload.exception
+        self.bot.dispatch("dismusic_track_exception", player, track , exception)
+        
 
     @commands.Cog.listener()
-    async def on_wavelink_track_end(self, player, track, *args, **kwargs):
-        self.bot.dispatch("dismusic_track_end", player, track)
-        await self.handle_end_stuck_exception(player, track)
+    async def on_wavelink_track_stuck(self, payload : TrackStuckEventPayload):
+        self.bot.dispatch("dismusic_track_stuck", payload.player, payload.track , payload.threshold)
 
     @commands.Cog.listener()
-    async def on_wavelink_track_exception(self, player, track, *args, **kwargs):
-        self.bot.dispatch("dismusic_track_exception", player, track)
-        await self.handle_end_stuck_exception(player, track)
-
-    @commands.Cog.listener()
-    async def on_wavelink_track_stuck(self, player, track, *args, **kwargs):
-        self.bot.dispatch("dismusic_track_stuck", player, track)
-        await self.handle_end_stuck_exception(player, track)
-
-    @commands.Cog.listener()
-    async def on_command_error(self, ctx, error):
+    async def on_command_error(self, ctx : commands.Context , error:commands.CommandError):
         errors = (
-            InvalidLoopMode,
+
             MustBeSameChannel,
             NotConnectedToVoice,
             PlayerNotConnected,

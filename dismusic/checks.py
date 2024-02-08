@@ -1,31 +1,38 @@
 from discord.ext import commands
 
-from .errors import MustBeSameChannel, NotConnectedToVoice, PlayerNotConnected
+from .errors import MustBeSameChannel, NotConnectedToVoice, PlayerNotConnected , NothingIsPlaying
 
 
-def voice_connected():
-    def predicate(ctx: commands.Context):
-        if not ctx.author.voice:
+def voicechannelcheck():
+    def predicate(ctx:commands.Context):
+        if not getattr(ctx.author , 'voice', 'channel'):
             raise NotConnectedToVoice("You are not connected to any voice channel.")
-
         return True
+    return commands.check(predicate) 
 
-    return commands.check(predicate)
-
-
-def voice_channel_player():
-    def predicate(ctx: commands.Context):
-        if not ctx.author.voice:
-            raise NotConnectedToVoice("You are not connected to any voice channel.")
-
+def botinvccheck():
+    def predicate(ctx:commands.Context):
         if not ctx.voice_client:
-            raise PlayerNotConnected("Player is not connected to any voice channel.")
-
-        if ctx.voice_client.channel.id != ctx.author.voice.channel.id:
-            raise MustBeSameChannel(
-                "You must be in the same voice channel as the player."
-            )
-
+            raise PlayerNotConnected("I am not connected to any voice channel.")
         return True
-
     return commands.check(predicate)
+
+def samevccheck():
+    def predicate(ctx:commands.Context):
+        if ctx.voice_client:
+            if ctx.author.voice.channel.id != ctx.voice_client.channel.id:
+                raise MustBeSameChannel("You must be connected to the same channel as the player.")
+        return True
+    return commands.check(predicate)
+
+def playingcheck():
+    def predicate(ctx:commands.Context):
+        if not ctx.voice_client.current:
+            raise NothingIsPlaying("I am playing anything right now.")
+        return True
+    return commands.check(predicate)
+                
+
+
+
+

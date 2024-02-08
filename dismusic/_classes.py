@@ -1,14 +1,12 @@
 from dataclasses import dataclass
 from typing import Union
+import discord
 
-from wavelink import (SoundCloudTrack, YouTubeMusicTrack, YouTubePlaylist,
-                      YouTubeTrack)
-from wavelink.ext.spotify import SpotifyTrack
 
-Provider = Union[
-    YouTubeTrack, YouTubePlaylist, YouTubeMusicTrack, SoundCloudTrack, SpotifyTrack
-]
-
+@dataclass
+class Colors:
+    default = discord.Color.dark_theme()
+    error = discord.Color.red()
 
 @dataclass
 class Emojis:
